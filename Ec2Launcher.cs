@@ -4,67 +4,69 @@ using System.Text;
 using System.Threading.Tasks;
 using Amazon.EC2;
 using Amazon.EC2.Model;
-using OutSystems.ExternalLibraries.SDK; // Required for ODC
+using OutSystems.ExternalLibraries.SDK;
 
 namespace ZoomLauncher
 {
-    // 1. THE CONTRACT (What ODC sees)
     [OSInterface(
         Name = "ZoomLauncher", 
-        Description = "Launches AWS EC2 instances for Zoom RTMS integration")] // Icon is optional
+        Description = "Launches and manages AWS EC2 instances for Zoom integration",
+        IconResourceName = "ZoomLauncher.icon.png")]
     public interface IZoomLauncher
     {
         [OSAction(
-            Description = "Spins up a new EC2 instance from a Golden Image to listen to a Zoom meeting.",
+            Description = "Launches a new instance.",
             ReturnName = "InstanceId")]
         string LaunchInstance(
-            [OSParameter(Description = "AWS Access Key ID")] string accessKey,
-            [OSParameter(Description = "AWS Secret Access Key")] string secretKey,
-            [OSParameter(Description = "AWS Region (e.g., us-east-1)")] string region,
-            [OSParameter(Description = "The ID of your Golden Image (AMI)")] string amiId,
-            [OSParameter(Description = "VPC Subnet ID")] string subnetId,
+            [OSParameter(Description = "AWS Access Key")] string accessKey,
+            [OSParameter(Description = "AWS Secret Key")] string secretKey,
+            [OSParameter(Description = "Region")] string region,
+            [OSParameter(Description = "AMI ID")] string amiId,
+            [OSParameter(Description = "Subnet ID")] string subnetId,
             [OSParameter(Description = "Security Group ID")] string securityGroupId,
-            [OSParameter(Description = "Zoom Meeting UUID")] string meetingId,
-            [OSParameter(Description = "Zoom Stream ID")] string streamId,
-            [OSParameter(Description = "Zoom Signaling URL")] string signalingUrl,
-            [OSParameter(Description = "Zoom Client ID")] string clientId,
-            [OSParameter(Description = "Zoom Client Secret")] string clientSecret,
-            [OSParameter(Description = "ODC API Key for callback")] string odcApiKey);
+            [OSParameter(Description = "Meeting UUID")] string meetingId,
+            [OSParameter(Description = "Stream ID")] string streamId,
+            [OSParameter(Description = "Signaling URL")] string signalingUrl,
+            [OSParameter(Description = "Client ID")] string clientId,
+            [OSParameter(Description = "Client Secret")] string clientSecret,
+            [OSParameter(Description = "ODC API Key")] string odcApiKey,
+            [OSParameter(Description = "ODC Callback URL")] string callbackUrl); // <--- NEW INPUT
+
+        [OSAction(
+            Description = "Forcefully terminates an EC2 instance.",
+            ReturnName = "IsSuccess")]
+        bool TerminateInstance(
+            string accessKey, string secretKey, string region, string instanceId);
     }
 
-    // 2. THE IMPLEMENTATION ( The Logic)
     public class ZoomLauncher : IZoomLauncher
     {
         public string LaunchInstance(
-            string accessKey, 
-            string secretKey, 
-            string region, 
-            string amiId, 
-            string subnetId, 
-            string securityGroupId, 
-            string meetingId, 
-            string streamId, 
-            string signalingUrl, 
-            string clientId, 
-            string clientSecret,
-            string odcApiKey)
+            string accessKey, string secretKey, string region, string amiId, string subnetId, string securityGroupId, 
+            string meetingId, string streamId, string signalingUrl, string clientId, string clientSecret, 
+            string odcApiKey, string callbackUrl) // <--- NEW INPUT
         {
-            // Configure AWS Client
             var config = new AmazonEC2Config { RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(region) };
             var ec2Client = new AmazonEC2Client(accessKey, secretKey, config);
 
-            // Create the Startup Script (User Data)
+            // Updated Startup Script
+            // We added the callbackUrl as the LAST argument
             var startupScript = $@"#!/bin/bash
 cd /home/ec2-user/zoom-worker
 
-# Log start
 echo ""Starting Zoom Worker for {meetingId}"" >> /home/ec2-user/zoom-debug.log
 
-# Run the worker as 'ec2-user'
-# Arguments passed: MeetingID, StreamID, SignalingURL, ClientID, ClientSecret, ODC_API_KEY
-su -c ""node worker.js '{meetingId}' '{streamId}' '{signalingUrl}' '{clientId}' '{clientSecret}' '{odcApiKey}'"" ec2-user
+# ARGUMENTS ORDER:
+# 1: MeetingID
+# 2: StreamID
+# 3: SignalingURL
+# 4: ClientID
+# 5: ClientSecret
+# 6: ODC_API_KEY
+# 7: CALLBACK_URL (New!)
 
-# Shutdown when finished
+su -c ""node worker.js '{meetingId}' '{streamId}' '{signalingUrl}' '{clientId}' '{clientSecret}' '{odcApiKey}' '{callbackUrl}'"" ec2-user
+
 shutdown -h now
 ";
 
@@ -79,8 +81,6 @@ shutdown -h now
                 SubnetId = subnetId,
                 SecurityGroupIds = new List<string> { securityGroupId },
                 UserData = userDataBase64,
-                
-                // Public IP required for Zoom connection
                 NetworkInterfaces = new List<InstanceNetworkInterfaceSpecification>
                 {
                     new InstanceNetworkInterfaceSpecification
@@ -91,10 +91,7 @@ shutdown -h now
                         AssociatePublicIpAddress = true
                     }
                 },
-
-                // Terminate on shutdown to save money
                 InstanceInitiatedShutdownBehavior = ShutdownBehavior.Terminate,
-
                 TagSpecifications = new List<TagSpecification>
                 {
                     new TagSpecification
@@ -105,11 +102,24 @@ shutdown -h now
                 }
             };
 
-            // Execute synchronously
             var response = ec2Client.RunInstancesAsync(request).Result;
-            
-            // Return the new Instance ID
             return response.Reservation.Instances[0].InstanceId;
+        }
+
+        public bool TerminateInstance(string accessKey, string secretKey, string region, string instanceId)
+        {
+            // (Keep existing termination logic exactly as it was)
+             var config = new AmazonEC2Config { RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(region) };
+            var ec2Client = new AmazonEC2Client(accessKey, secretKey, config);
+
+            var request = new TerminateInstancesRequest
+            {
+                InstanceIds = new List<string> { instanceId }
+            };
+
+            var response = ec2Client.TerminateInstancesAsync(request).Result;
+            var state = response.TerminatingInstances[0].CurrentState.Name;
+            return (state == InstanceStateName.ShuttingDown || state == InstanceStateName.Terminated);
         }
     }
 }

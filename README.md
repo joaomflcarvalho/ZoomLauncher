@@ -80,13 +80,3 @@ Upload the resulting ZoomLauncher.zip to the ODC Portal -> Assets -> Libraries.
 ## 📄 License
 MIT
 
-
-### **How to add it to Git now:**
-1.  Save the file.
-2.  Run:
-    ```bash
-    git add README.md
-    git commit -m "Add documentation"
-    git push
-    ```
-

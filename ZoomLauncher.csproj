@@ -9,4 +9,9 @@
     <PackageReference Include="AWSSDK.EC2" Version="3.7.*" />
     <PackageReference Include="OutSystems.ExternalLibraries.SDK" Version="1.5.0" /> 
   </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="icon.png" />
+  </ItemGroup>
+  
 </Project>
