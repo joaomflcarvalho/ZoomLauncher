@@ -1,0 +1,20 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+dist/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# The ODC Zip file
+*.zip
+
+# VS Code settings (optional, but good practice)
+.vscode/
