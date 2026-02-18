@@ -1,6 +1,7 @@
 # ZoomLauncher (OutSystems ODC)
 
-An **OutSystems Developer Cloud (ODC) External Logic** library that spawns ephemeral AWS EC2 instances to process Zoom Real-Time Meeting Streams (RTMS).
+An **OutSystems Developer Cloud (ODC) External Logic** library that spawns ephemeral AWS EC2 instances to process Zoom Real-Time Meeting Streams (RTMS). To implement the AWS EC2 instance follow to this repo: https://github.com/joaomflcarvalho/ZoomAWSListener
+
 
 ## 🚀 Why this exists?
 
